@@ -12,7 +12,6 @@ from typing import List, Tuple, Dict, Optional
 from scgpt.tokenizer import tokenize_and_pad_batch, random_mask_value
 from scgpt import SubsetsBatchSampler
 from scgpt.loss import (
-    masked_mse_loss,
     masked_relative_error,
     criterion_neg_log_bernoulli,
 )
@@ -455,7 +454,7 @@ def evaluate(
                     MVC=False,
                     ECS=False,
                     # mod_types=mod_types if config.use_mod else None,
-                    do_sample=config.do_sample_in_train,
+                    # do_sample=do_sample_in_train,
                     # generative_training = False,
                 )
                 if config.task == "annotation":
@@ -493,114 +492,53 @@ def evaluate(
     return total_loss / total_num
 
 
-# def predict(
-#     model: nn.Module,
-#     loader: DataLoader,
-#     vocab,
-#     config,
-#     device,
-# ) -> float:
-#     """
-#     Evaluate the model on the evaluation data.
-#     """
-#     model.eval()
-
-#     predictions = []
-#     with torch.no_grad():
-#         for batch,batch_data in enumerate(loader):
-#             try:
-#                 # 检查 input_gene_ids 的范围和形状
-#                 print("input_gene_ids shape:", batch_data["gene_ids"].shape)
-#                 print("input_gene_ids max index:", batch_data["gene_ids"].max().item())
-#                 print("input_gene_ids min index:", batch_data["gene_ids"].min().item())
-
-#                 # 检查 input_values 的范围和形状
-#                 print("input_values shape:", batch_data["values"].shape)
-
-#                 # 检查 target_values 的范围和形状
-#                 print("target_values shape:", batch_data["target_values"].shape)
-
-#                 # 检查 batch_labels 的范围和形状
-#                 print("batch_labels shape:", batch_data["batch_labels"].shape)
-#                 print("batch_labels max index:", batch_data["batch_labels"].max().item())
-#                 print("batch_labels min index:", batch_data["batch_labels"].min().item())
-#                 # 转移数据到GPU
-#                 # 要移到cuda上需要是long类型的，在执行数据迁移的时候，可能会自动调用tensor的索引
-#                 input_gene_ids = batch_data["gene_ids"].to(device)
-#                 input_values = batch_data["values"].to(device)
-#                 target_values = batch_data["target_values"].to(device)
-#                 batch_labels = batch_data["batch_labels"].to(device)
-#                 # input_gene_ids = batch_data["gene_ids"]
-#                 # input_values = batch_data["values"]
-#                 # target_values = batch_data["target_values"]
-#                 # batch_labels = batch_data["batch_labels"]
-#                 # celltype_labels = batch_data["celltype_labels"].to(device)
-#             except Exception as e:
-#                 print(f"Error processing batch {batch}: {e}")
-#                 print(f"Batch data: {batch_data}")
-#                 raise e
-#             # celltype_labels = batch_data["celltype_labels"].to(device)
-
-#             src_key_padding_mask = input_gene_ids.eq(vocab[config.pad_token])
-
-#             with torch.cuda.amp.autocast(enabled=config.amp):
-#                 output_dict = model(
-#                     input_gene_ids,
-#                     input_values,
-#                     src_key_padding_mask=src_key_padding_mask,
-#                     batch_labels=batch_labels
-#                     if config.use_batch_labels or config.DSBN
-#                     else None,
-#                     CLS=config.CLS,
-#                     MVC=False,
-#                     ECS=False,
-#                 )
-
-#                 # output_values = output_dict["cls_output"]
-#                 # preds = output_values.argmax(1).cpu().numpy()
-#                 # predictions.append(preds)
-
-#                 output_values=output_dict["mlm_output"]
-#                 predictions.append(output_values)
-
-#     return np.concatenate(predictions, axis=0)
-
 def predict(
     model: nn.Module,
     loader: DataLoader,
     vocab,
-    criterion_gep_gepc,
-    device,
     config,
+    device,
 ) -> float:
     """
-    predict the model on the test data.
+    Evaluate the model on the evaluation data.
     """
-    import wandb
-
     model.eval()
-    total_loss = 0.0
-    # total_error = 0.0
-    total_dab = 0.0
-    total_num = 0
+
+    predictions = []
     with torch.no_grad():
-        os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
         for batch,batch_data in enumerate(loader):
-            # 检查 input_gene_ids 的范围和形状
-            # print("input_gene_ids shape:", batch_data["gene_ids"].shape)
-            # # print("input_gene_ids max index:", batch_data["gene_ids"].max().item())
-            # # print("input_gene_ids min index:", batch_data["gene_ids"].min().item())
+            try:
+                # 检查 input_gene_ids 的范围和形状
+                print("input_gene_ids shape:", batch_data["gene_ids"].shape)
+                print("input_gene_ids max index:", batch_data["gene_ids"].max().item())
+                print("input_gene_ids min index:", batch_data["gene_ids"].min().item())
 
-            input_gene_ids = batch_data["gene_ids"].to(device)
-            input_values = batch_data["values"].to(device)
-            target_values = batch_data["target_values"].to(device)
-            batch_labels = batch_data["batch_labels"].to(device)
-            # print("input gene id shape:",input_gene_ids.shape)
+                # 检查 input_values 的范围和形状
+                print("input_values shape:", batch_data["values"].shape)
 
-            # if config.task == "annotation":
-            #     celltype_labels = batch_data["celltype_labels"].to(device)
-            # if config.task == "multiomic":
-            #     mod_types = batch_data["mod_types"].to(device)
+                # 检查 target_values 的范围和形状
+                print("target_values shape:", batch_data["target_values"].shape)
+
+                # 检查 batch_labels 的范围和形状
+                print("batch_labels shape:", batch_data["batch_labels"].shape)
+                print("batch_labels max index:", batch_data["batch_labels"].max().item())
+                print("batch_labels min index:", batch_data["batch_labels"].min().item())
+                # 转移数据到GPU
+                # 要移到cuda上需要是long类型的，在执行数据迁移的时候，可能会自动调用tensor的索引
+                input_gene_ids = batch_data["gene_ids"].to(device)
+                input_values = batch_data["values"].to(device)
+                target_values = batch_data["target_values"].to(device)
+                batch_labels = batch_data["batch_labels"].to(device)
+                # input_gene_ids = batch_data["gene_ids"]
+                # input_values = batch_data["values"]
+                # target_values = batch_data["target_values"]
+                # batch_labels = batch_data["batch_labels"]
+                # celltype_labels = batch_data["celltype_labels"].to(device)
+            except Exception as e:
+                print(f"Error processing batch {batch}: {e}")
+                print(f"Batch data: {batch_data}")
+                raise e
+            # celltype_labels = batch_data["celltype_labels"].to(device)
 
             src_key_padding_mask = input_gene_ids.eq(vocab[config.pad_token])
 
@@ -612,67 +550,31 @@ def predict(
                     batch_labels=batch_labels
                     if config.use_batch_labels or config.DSBN
                     else None,
-                    CLS=False,  # evaluation does not need CLS or CCE
+                    CLS=config.CLS,
                     MVC=False,
                     ECS=False,
-                    # mod_types=mod_types if config.use_mod else None,
-                    do_sample=config.do_sample_in_train,
-                    # generative_training = False,
                 )
-                # print("output_dict: ",output_dict)
-                if config.task == "annotation":
-                    output_values = output_dict["cls_output"]
-                    loss = criterion_cls(output_values, celltype_labels)
 
-                elif config.task in ["integration", "multiomic"]:
-                    output_values = output_dict["mlm_output"]
-                    masked_positions = input_values.eq(config.mask_value)
-                    # GEP
-                    loss = criterion_gep_gepc(
-                        output_values, target_values, masked_positions
-                    )
-                    # GEPC
-                    # loss_gepc = criterion_gep_gepc(
-                    #     output_dict["mvc_output"], target_values, masked_positions
-                    # )
-                    # loss = loss + loss_gepc
+                # output_values = output_dict["cls_output"]
+                # preds = output_values.argmax(1).cpu().numpy()
+                # predictions.append(preds)
 
-                if config.DAR:
-                    loss_dab = criterion_dab(output_dict["dab_output"], batch_labels)
+                output_values=output_dict["mlm_output"]
+                predictions.append(output_values)
 
-            # print("loss: ",loss)
-            total_loss += loss.item() * len(input_gene_ids)
-            total_loss+=loss
-
-            if config.DAR:
-                total_dab += (
-                    loss_dab.item() * len(input_gene_ids) if config.DAR else 0.0
-                )
-            else:
-                total_dab = 0
-
-            total_num += len(input_gene_ids)
-
-    wandb.log(
-        {
-            "test/loss": (total_loss + config.dab_weight * total_dab) / total_num,
-        },
-    )
-
-    return total_loss / total_num
+    return np.concatenate(predictions, axis=0)
 
 
 # %% inference
 def test(
     model: nn.Module, adata: DataLoader, gene_ids, vocab, config, device, logger
 ) -> float:
-    print("batch size: ",config.batch_size)
-    print("sequence length: ",config.max_seq_len)
     all_counts = (
         adata.layers[config.input_layer_key].A
         if issparse(adata.layers[config.input_layer_key])
         else adata.layers[config.input_layer_key]
     )
+
     genes = adata.var["gene_name"].tolist()
 
     celltypes_labels = adata.obs["celltype_id"].tolist()  # make sure count from 0
@@ -681,8 +583,19 @@ def test(
     batch_ids = adata.obs["batch_id"].tolist()
     batch_ids = np.array(batch_ids)
 
+    (
+        test_data,
+        _,
+        test_celltype_labels,
+        _,
+        test_batch_labels,
+        _,
+    )=train_test_split(
+        all_counts,celltypes_labels,batch_ids,test_size=0,shuffle=True
+    )
+
     tokenized_test = tokenize_and_pad_batch(
-        all_counts,
+        test_data,
         gene_ids,
         max_len=config.max_seq_len,
         vocab=vocab,
@@ -707,53 +620,51 @@ def test(
         "gene_ids": tokenized_test["genes"],
         "values": input_values_test,
         "target_values": tokenized_test["values"],
-        "batch_labels": torch.from_numpy(batch_ids).long(),
-        "celltype_labels": torch.from_numpy(celltypes_labels).long(),
+        "batch_labels": torch.from_numpy(test_batch_labels).long(),
+        # "celltype_labels": torch.from_numpy(celltypes_labels).long(),
     }
 
-    # eval_batch_size=config.batch_size
-    test_loader = DataLoader(
-        dataset=SeqDataset(test_data_pt),
-        batch_size=config.batch_size,  
-        shuffle=False,
-        drop_last=False,
-        num_workers=min(len(os.sched_getaffinity(0)), config.batch_size // 2),
-        pin_memory=True,
-    )
-
-
-    # test_loader=prepare_dataloader(
-    #     test_data_pt,
+    # test_loader = DataLoader(
+    #     dataset=SeqDataset(test_data_pt),
     #     batch_size=config.batch_size,
     #     shuffle=False,
-    #     intra_domain_shuffle=True,
     #     drop_last=False,
+    #     num_workers=min(len(os.sched_getaffinity(0)), config.batch_size // 2),
+    #     pin_memory=True,
     # )
 
-    model.eval()
-    predictions = predict(
-        model,
-        test_loader,
-        vocab,
-        criterion_gep_gepc=masked_mse_loss,
-        device=device,
-        config=config,
+    test_loader=prepare_dataloader(
+        test_data_pt,
+        batch_size=config.batch_size,
+        shuffle=False,
+        intra_domain_shuffle=True,
+        drop_last=False,
     )
 
-    loss=predictions
-    # loss=0
-    # for epoch in range(1,config.epochs+1):
-    #     loss=loss+evaluate(
-    #         model,
-    #         test_loader,
-    #         vocab,
-    #         masked_mse_loss,
-    #         nn.CrossEntropyLoss(),
-    #         nn.CrossEntropyLoss(),
-    #         device,
-    #         config,
-    #         epoch
-    #     )
+    model.eval()
+    # predictions = predict(
+    #     model,
+    #     test_loader,
+    #     vocab,
+    #     config,
+    #     device,
+    # )
+
+    # masked_positions=input_values_test.eq(config.mask_value)
+    # loss=criterion_gep_gepc(predictions,target_values_test,masked_positions)
+    loss=0
+    for epoch in range(1,config.epochs+1):
+        loss=loss+evaluate(
+            model,
+            test_loader,
+            vocab,
+            masked_mse_loss,
+            nn.CrossEntropyLoss(),
+            nn.CrossEntropyLoss(),
+            device,
+            config,
+            epoch
+        )
     
     # compute accuracy, precision, recall, f1
     # accuracy = accuracy_score(target_values_test, predictions)

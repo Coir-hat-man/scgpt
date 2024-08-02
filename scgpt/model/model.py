@@ -28,38 +28,39 @@ from .grad_reverse import grad_reverse
 class TransformerModel(nn.Module):
     def __init__(
         self,
-        ntoken: int,
-        d_model: int,
+        ntoken: int,    # 词汇表的大小
+        d_model: int,   # 模型的维度
         nhead: int,
-        d_hid: int,
-        nlayers: int,
-        nlayers_cls: int = 3,
-        n_cls: int = 1,
-        vocab: Any = None,
+        d_hid: int,     # 前馈网络的隐藏层维度
+        nlayers: int,   # encoder层的数量
+        nlayers_cls: int = 3,   # 分类decoder层的数量
+        n_cls: int = 1, # 分类任务的数量
+        vocab: Any = None,  #词汇表对象
         dropout: float = 0.5,
         pad_token: str = "<pad>",
         pad_value: int = 0,
-        do_mvc: bool = False,
-        do_dab: bool = False,
+        do_mvc: bool = False,   #是否执行多值分类
+        do_dab: bool = False,   #是否进行领域对抗训练
         use_batch_labels: bool = False,
         num_batch_labels: Optional[int] = None,
         domain_spec_batchnorm: Union[bool, str] = False,
         input_emb_style: str = "continuous",
-        n_input_bins: Optional[int] = None,
+        n_input_bins: Optional[int] = None, # 输入值的分类数量
         cell_emb_style: str = "cls",
         mvc_decoder_style: str = "inner product",
-        ecs_threshold: float = 0.3,
-        explicit_zero_prob: bool = False,
+        ecs_threshold: float = 0.3, # 显式零概率的阈值
+        explicit_zero_prob: bool = False,   # 是否显式处理零概率
         use_fast_transformer: bool = False,
-        fast_transformer_backend: str = "flash",
+        fast_transformer_backend: str = "flash",    # 快速transformer的后端
         pre_norm: bool = False,
     ):
         super().__init__()
+        self.use_batch_labels=False
         self.model_type = "Transformer"
         self.d_model = d_model
         self.do_dab = do_dab
         self.ecs_threshold = ecs_threshold
-        self.use_batch_labels = use_batch_labels
+        # self.use_batch_labels = use_batch_labels
         self.domain_spec_batchnorm = domain_spec_batchnorm
         self.input_emb_style = input_emb_style
         self.cell_emb_style = cell_emb_style
@@ -83,6 +84,7 @@ class TransformerModel(nn.Module):
         self.use_fast_transformer = use_fast_transformer
 
         # TODO: add dropout in the GeneEncoder
+        # 将输入数据（例如基因表达数据）转换为适合输入到 transformer 模型中的嵌入
         self.encoder = GeneEncoder(ntoken, d_model, padding_idx=vocab[pad_token])
 
         # Value Encoder, NOTE: the scaling style is also handled in _encode method
@@ -223,7 +225,7 @@ class TransformerModel(nn.Module):
         return cell_emb
 
     def _check_batch_labels(self, batch_labels: Tensor) -> None:
-        if self.use_batch_labels or self.domain_spec_batchnorm:
+        if self.use_batch_labels and self.domain_spec_batchnorm:
             assert batch_labels is not None
         elif batch_labels is not None:
             raise ValueError(
@@ -289,12 +291,17 @@ class TransformerModel(nn.Module):
             src_key_padding_mask = torch.zeros(
                 total_embs.shape[:2], dtype=torch.bool, device=total_embs.device
             )
+
+        # h_n
         transformer_output = self.transformer_encoder(
             total_embs, src_key_padding_mask=src_key_padding_mask
         )
 
+        # concat(h_n,emb(t_b))
         if self.use_batch_labels:
             batch_emb = self.batch_encoder(batch_labels)  # (batch, embsize)
+
+        #masked language model
         mlm_output = self.decoder(
             transformer_output
             if not self.use_batch_labels
@@ -345,9 +352,11 @@ class TransformerModel(nn.Module):
         transformer_output = self._encode(
             src, values, src_key_padding_mask, batch_labels
         )
+        # print("here1")
         if self.use_batch_labels:
             batch_emb = self.batch_encoder(batch_labels)  # (batch, embsize)
 
+        # print("here2")
         output = {}
         mlm_output = self.decoder(
             transformer_output
@@ -361,6 +370,7 @@ class TransformerModel(nn.Module):
             ),
             # else transformer_output + batch_emb.unsqueeze(1),
         )
+        # print("here3")
         if self.explicit_zero_prob and do_sample:
             bernoulli = Bernoulli(probs=mlm_output["zero_probs"])
             output["mlm_output"] = bernoulli.sample() * mlm_output["pred"]
@@ -369,8 +379,12 @@ class TransformerModel(nn.Module):
         if self.explicit_zero_prob:
             output["mlm_zero_probs"] = mlm_output["zero_probs"]
 
+        # print("here4")
+
         cell_emb = self._get_cell_emb_from_layer(transformer_output, values)
         output["cell_emb"] = cell_emb
+
+        # print("here5")
 
         if CLS:
             output["cls_output"] = self.cls_decoder(cell_emb)  # (batch, n_cls)
@@ -721,6 +735,7 @@ class FlashTransformerEncoderLayer(nn.Module):
 
 
 class GeneEncoder(nn.Module):
+    # nn.Embedding + LayerNorm
     def __init__(
         self,
         num_embeddings: int,
@@ -744,6 +759,9 @@ class PositionalEncoding(nn.Module):
         super().__init__()
         self.dropout = nn.Dropout(p=dropout)
 
+        # 生成一个形状为 (max_len, 1) 的张量，其中包含从 0 到 max_len - 1 的整数。
+        # arange(max_len)生成一维向量(0,1,2...max_len-1); 
+        # unsqueeze(1)扩充一维，变成二维向量(max_len,1)
         position = torch.arange(max_len).unsqueeze(1)
         div_term = torch.exp(
             torch.arange(0, d_model, 2) * (-math.log(10000.0) / d_model)
